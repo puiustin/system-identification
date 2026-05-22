@@ -1,5 +1,5 @@
-function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4D(at,bt,K,N,nr) 
-%ARMAX[2,2] + uf (intrare filtrata)
+function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4C(at,bt,K,N,nr) 
+%ARMAX[2,2] + uf (intrare nefiltrata)
 % ISLAB_3D   Module that estimates the parameters of an 
 %            ARX[2,2] model, with the help of 
 %            Least Squares (LS) Method. 
@@ -134,7 +134,7 @@ u = sign(randn(N,nr)) ;
 % 
 % Filtering and normalizing the input
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-u = filter(1,[1 p],u) ; 
+%u = filter(1,[1 p],u) ; 
 u = u./sqrt(ones(N,1)*sum(u.*u)/N) ; 
 % 
 % Generating the nr realizations
@@ -207,7 +207,7 @@ figure(FIG),clf ;
       a = axis ; 
       axis([a(1:3) a(4)+0.1*(a(4)-a(3))]) ; 
       title(['Estimating an ARX[2,2] model ' ... 
-             'by the Least Squares Method - filtrat.']) ; 
+             'by the Least Squares Method. - nefiltrat']) ; 
       xlabel('Normalized frequency [rad/s] (log)') ; 
       ylabel('FR magnitude') ; 
       set(FIG,'DefaultTextHorizontalAlignment','left') ;
@@ -231,7 +231,7 @@ figure(FIG),clf ;
    e = a(4)-a(3) ; 
    axis([0 nr+1 a(3)-0.1*3 a(4)+0.25*e]) ; 
    title(['Estimating an ARX[2,2] model ' ... 
-          'by the Least Squares Method - filtrat.']) ; 
+          'by the Least Squares Method - nefiltrat.']) ; 
    xlabel('Realization index') ; 
    ylabel('Noise variance') ; 
    set(FIG,'DefaultTextHorizontalAlignment','left') ; 

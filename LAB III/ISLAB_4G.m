@@ -1,7 +1,7 @@
-function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4D(at,bt,K,N,nr) 
-%ARMAX[2,2] + uf (intrare filtrata)
+function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4G(at,bt,K,N,nr) 
+%ARMAX[2,2] + uf (intrare nefiltrata)
 % ISLAB_3D   Module that estimates the parameters of an 
-%            ARX[2,2] model, with the help of 
+%           OE[2,2] model, with the help of 
 %            Least Squares (LS) Method. 
 %
 % Inputs:	at  # true coefficients of AR part 
@@ -102,7 +102,7 @@ if (nargin < 1)
    at = [-0.4 -0.32] ;
 end
 if (isempty(at))
-   at = [-0.4 -0.32] ; ;
+   at = [-0.4 -0.32] ; 
 end
 at = [1 at(1:2)] ; 
 a = roots(at) ; 
@@ -134,12 +134,12 @@ u = sign(randn(N,nr)) ;
 % 
 % Filtering and normalizing the input
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-u = filter(1,[1 p],u) ; 
+%u = filter(1,[1 p],u) ; 
 u = u./sqrt(ones(N,1)*sum(u.*u)/N) ; 
 % 
 % Generating the nr realizations
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-y = filter(bt,at,u) + filter(1,at,e) ; 
+y = filter(bt,at,u) + e ; 
 % 
 % Estimating the ARX parameters 
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -148,30 +148,50 @@ b = zeros(nr, 2) ;
 lambda = zeros(nr, 1) ;
 mag = zeros(K, nr) ; 
 phi = zeros(K, nr) ; 
+e_y = e - y; %diferenta iesire - zgomot
 for p=1:nr
+    %covariante zgomot
+    [re_y,K] = xcov(e_y(:,p),"biased");
+    re_y = re_y(K>=0); %zgomot - (minus) iesire
+    re_y = re_y(1:2); % 0,1
+
+    [reu,K] = xcov(e(:,p), u(:,p), 'biased');
+    reu = reu(K>= -1);
+    reu = reu(1:3); %rue[1], reu[0], reu[1];
+
+    [rye,K] = xcov(y(:,p), e(:,p), 'biased');
+    rye = rye(K>= 0);
+    rye = rye(1:3);
+
+
+
+
+    %covariante fara zgomot
    [ru,K] = xcov(u(:,p),'biased') ;	    % Constructing the 
    ru = ru(K>=0) ; 			    % auto-covariance of input. 
-   ru = ru(1:2) 
+   ru = ru(1:2); 
    [ry,K] = xcov(y(:,p),'biased') ;	    % Constructing the 
    ry = ry(K>=0) ; 			    % auto-covariance of output. 
-   ry = ry(1:3) 
+   ry = ry(1:3) ;
    [ryu,K] = xcov(y(:,p),u(:,p),'biased') ; % Constructing the 
    ryu = ryu(K>=-1) ;			    % cross-covariance 
-   ryu = ryu(1:4) 			    % output-input. 
-   Rtemp = -[ryu(2) ryu(3) ; ... 
-         ryu(1) ryu(2)]  ;
-   R = [toeplitz(ry(1:2)) Rtemp ; ... 
-        Rtemp'          toeplitz(ru)]  		    % Main matrix.  
-   r = [-ry(2) ; -ry(3) ; ryu(3) ; ryu(4)] % Free vector. 
-   r = R\r  				    % Coefficients. 
+   ryu = ryu(1:4);		% output-input. 
+
+
+   Rtemp = [(reu(2)-ryu(2)) (reu(3) - ryu(3)); ... 
+         (reu(1) - ryu(1)) (reu(2) - ryu(2))]  ;
+   R = [toeplitz(re_y(1:2)) Rtemp ; ... 
+        Rtemp'          toeplitz(ru)];  		    % Main matrix.  
+   r = [(rye(2)-ry(2)) ; (rye(3)-ry(3)) ; ryu(3) ; ryu(4)]; % Free vector. 
+   r = R\r ;				    % Coefficients. 
    a(p, :) = r(1:2) ; 
    b(p, :) = r(3:4) ; 
-   e = [y(:,p) ... 
-         [0 ; y(1:(N-1),p)] ...
-         [0 ; 0 ; y(1:(N-2),p)] ... 
+   e2 = [y(:,p) ... 
+         [0 ; -e_y(1:(N-1),p)] ...
+         [0 ; 0 ; -e_y(1:(N-2),p)] ... 
         -[0 ; u(1:(N-1),p)] ... 
         -[0 ; 0 ; u(1:(N-2),p)]] * [1 ; r] ;% Noise estimation. 
-   lambda(p) = norm(e)/sqrt(N-4) ;% Standard deviation.  
+   lambda(p) = norm(e2)/sqrt(N-4) ;% Standard deviation.  
 % 
 % Estimating the frequency response 
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,8 +226,8 @@ figure(FIG),clf ;
                f,magm-magstd,':r',f,magm+magstd,':r') ; 
       a = axis ; 
       axis([a(1:3) a(4)+0.1*(a(4)-a(3))]) ; 
-      title(['Estimating an ARX[2,2] model ' ... 
-             'by the Least Squares Method - filtrat.']) ; 
+      title(['Estimating an OE[2,2] model ' ... 
+             'by the Least Squares Method - nefiltrata.']) ; 
       xlabel('Normalized frequency [rad/s] (log)') ; 
       ylabel('FR magnitude') ; 
       set(FIG,'DefaultTextHorizontalAlignment','left') ;
@@ -230,8 +250,8 @@ figure(FIG),clf ;
    a = axis ;
    e = a(4)-a(3) ; 
    axis([0 nr+1 a(3)-0.1*3 a(4)+0.25*e]) ; 
-   title(['Estimating an ARX[2,2] model ' ... 
-          'by the Least Squares Method - filtrat.']) ; 
+   title(['Estimating an OE[2,2] model ' ... 
+          'by the Least Squares Method.- nefiltrata']) ; 
    xlabel('Realization index') ; 
    ylabel('Noise variance') ; 
    set(FIG,'DefaultTextHorizontalAlignment','left') ; 

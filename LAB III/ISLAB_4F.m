@@ -1,21 +1,21 @@
-function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4D(at,bt,K,N,nr) 
-%ARMAX[2,2] + uf (intrare filtrata)
+function [a,b,lambda,magi,phii,mag,phi,f] = ISLAB_4F(at,bt,K,N,nr) 
+%OE[1,1] + uf (intrare filtrata)
 % ISLAB_3D   Module that estimates the parameters of an 
-%            ARX[2,2] model, with the help of 
+%            ARX[1,1] model, with the help of 
 %            Least Squares (LS) Method. 
 %
 % Inputs:	at  # true coefficients of AR part 
-%                     ([-0.4 -0.32], by default)
+%                     ([-0.4 -0.32], by default) 0.4 
 %               bt  # true coefficents of X part 
-%                     ([0.5 0.03], by default)
+%                     ([0.5 0.03], by default) 0.5
 %               K   # number of frequency nodes (50, by default)
 %               N   # simulation period (100, by default)
 %               nr  # number of realizations (100, by default)
 %
 % Outputs:	a      # LS estimates of AR coefficients 
-%                        (nr-by-2 matrix)
+%                        (nr-by-2 matrix) 1
 %               b      # LS estimates of X coefficents 
-%                        (nr-by-2 matrix)
+%                        (nr-by-2 matrix) 1
 %               lambda # LS estimates of noise standard deviation 
 %                        (nr-length vector)
 %               magi   # magnitude of ideal frequency response 
@@ -92,30 +92,26 @@ if (~K)
    K = 50 ;
 end  
 if (nargin < 2)
-   bt = [0.5 0.03] ;
+   bt = 0.5  ;
 end 
 if (isempty(bt))
-   bt = [0.5 0.03] ;
+   bt = 0.5 ;
 end  
-bt = [0 bt(1:2)] ;
+bt = [0 bt] ;
 if (nargin < 1)
-   at = [-0.4 -0.32] ;
+   at = -0.4  ;
 end
 if (isempty(at))
-   at = [-0.4 -0.32] ; ;
+   at = -0.4  ; 
 end
-at = [1 at(1:2)] ; 
+at = [1 at] ; 
 a = roots(at) ; 
 if (abs(a(1))>=1)
    war_err(['<ISLAB_4D>: Model unstable. ' ...
             'Reciprocal model considered instead.']) ; 
    a(1) = 1/a(1) ; 
 end 
-if (abs(a(2))>=1)
-   war_err(['<ISLAB_4D>: Model unstable. ' ...
-            'Reciprocal model considered instead.']) ; 
-   a(2) = 1/a(2) ; 
-end 
+
 at = poly(a) ; 
 % 
 % Generating the ideal frequency response
@@ -139,39 +135,49 @@ u = u./sqrt(ones(N,1)*sum(u.*u)/N) ;
 % 
 % Generating the nr realizations
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-y = filter(bt,at,u) + filter(1,at,e) ; 
+y = filter(bt,at,u) + e; 
 % 
 % Estimating the ARX parameters 
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-a = zeros(nr, 2) ; 
-b = zeros(nr, 2) ;
+a = zeros(nr, 1) ;
+b = zeros(nr, 1) ;
 lambda = zeros(nr, 1) ;
 mag = zeros(K, nr) ; 
 phi = zeros(K, nr) ; 
+%avem nevoie de semnalul e - y
+e_y = e - y;
 for p=1:nr
+  [re_y,K] = xcov(e_y(:,p),'biased'); % Constructing the
+   re_y = re_y(K>=0);           % auto-covariance of e-y
+   re_y = re_y(1);
+
+   [reu,K] = xcov(e(:,p),u(:,p),'biased'); % Constructing the
+   reu = reu(K>=0);           % cross-covariance
+   reu = reu(1); % noise-input reu[0]
+
+   [rye,K] = xcov(y(:,p),e(:,p),'biased'); % Constructing the
+   rye = rye(K>=0);           % cross-covariance
+   rye = rye(1:2);    %rye[0] rye[1]
+
    [ru,K] = xcov(u(:,p),'biased') ;	    % Constructing the 
    ru = ru(K>=0) ; 			    % auto-covariance of input. 
-   ru = ru(1:2) 
+   ru = ru(1); 
    [ry,K] = xcov(y(:,p),'biased') ;	    % Constructing the 
    ry = ry(K>=0) ; 			    % auto-covariance of output. 
-   ry = ry(1:3) 
+   ry = ry(1:2); 
    [ryu,K] = xcov(y(:,p),u(:,p),'biased') ; % Constructing the 
-   ryu = ryu(K>=-1) ;			    % cross-covariance 
-   ryu = ryu(1:4) 			    % output-input. 
-   Rtemp = -[ryu(2) ryu(3) ; ... 
-         ryu(1) ryu(2)]  ;
-   R = [toeplitz(ry(1:2)) Rtemp ; ... 
-        Rtemp'          toeplitz(ru)]  		    % Main matrix.  
-   r = [-ry(2) ; -ry(3) ; ryu(3) ; ryu(4)] % Free vector. 
-   r = R\r  				    % Coefficients. 
-   a(p, :) = r(1:2) ; 
-   b(p, :) = r(3:4) ; 
-   e = [y(:,p) ... 
-         [0 ; y(1:(N-1),p)] ...
-         [0 ; 0 ; y(1:(N-2),p)] ... 
-        -[0 ; u(1:(N-1),p)] ... 
-        -[0 ; 0 ; u(1:(N-2),p)]] * [1 ; r] ;% Noise estimation. 
-   lambda(p) = norm(e)/sqrt(N-4) ;% Standard deviation.  
+   ryu = ryu(K>=0) ;			    % cross-covariance 
+   ryu = ryu(1:2); 			    % output-input. 
+   
+   R = [re_y(1) reu(1) - ryu(1); reu(1) - ryu(1)  ru(1) ];		    % Main matrix.  
+   r = [rye(2) - ry(2); ryu(2)]; % Free vector. 
+   r = R\r;  				    % Coefficients. 
+   a(p, :) = r(1) ; 
+   b(p, :) = r(2) ; 
+   e1 = [y(:,p) ...   %e = y + a*(y-e)[n-1] - b*u[n-1]
+         [0 ; -e_y(1:(N-1),p)] ...
+        -[0 ; u(1:(N-1),p)]] * [1 ; r] ;% Noise estimation. 
+   lambda(p) = norm(e1)/sqrt(N-2) ;% Standard deviation.  
 % 
 % Estimating the frequency response 
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,8 +212,8 @@ figure(FIG),clf ;
                f,magm-magstd,':r',f,magm+magstd,':r') ; 
       a = axis ; 
       axis([a(1:3) a(4)+0.1*(a(4)-a(3))]) ; 
-      title(['Estimating an ARX[2,2] model ' ... 
-             'by the Least Squares Method - filtrat.']) ; 
+      title(['Estimating an OX[1,1] model ' ... 
+             'by the Least Squares Method.']) ; 
       xlabel('Normalized frequency [rad/s] (log)') ; 
       ylabel('FR magnitude') ; 
       set(FIG,'DefaultTextHorizontalAlignment','left') ;
@@ -230,15 +236,15 @@ figure(FIG),clf ;
    a = axis ;
    e = a(4)-a(3) ; 
    axis([0 nr+1 a(3)-0.1*3 a(4)+0.25*e]) ; 
-   title(['Estimating an ARX[2,2] model ' ... 
-          'by the Least Squares Method - filtrat.']) ; 
+   title(['Estimating an OX[1,1] model ' ... 
+          'by the Least Squares Method.']) ; 
    xlabel('Realization index') ; 
    ylabel('Noise variance') ; 
    set(FIG,'DefaultTextHorizontalAlignment','left') ; 
    legend('estimated','true') ; 
    text(nr/10,a(4)+0.15*e,... 
         ['        True parameters: ' ... 
-          sprintf('%9.4f',[at(2:3) bt(2:3)])]) ; 
+          sprintf('%9.4f',[at(2) bt(2)])]) ; 
    text(nr/10,a(4)+0.05*e,... 
         ['Estimated parameters: ' ... 
           sprintf('%9.4f',[am bm])]) ; 
