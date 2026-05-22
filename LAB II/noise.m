@@ -39,8 +39,7 @@ function noise(operation)
 %
 % BEGIN
 %
-% Global variables
-% ~~~~~~~~~~~~~~
+% declararea variabilelor globale folosite in interfata si simulare
 global fig_noise ccs_col fig_ccs
 global system_noise error_noise
 global Bd Ad h
@@ -52,11 +51,11 @@ global a1 a2 b1 Bd1 K
 global cov_handle spectr_handle realiz_handle
 global cov_axes spectrum_axes realization_axes
 %
-% Initial constants
+% constante initiale
 % ~~~~~~~~~~~~~~
 ccs_col=1;
 %
-% Faults preventing
+% prevenirea erorilor si setarea operatiei implicite
 % ~~~~~~~~~~~~~~~
 if (nargin<1)
    operation = 'show'; 
@@ -65,10 +64,10 @@ if (isempty(operation))
    operation = 'show'; 
 end
 %
-% Operation SHOW
+% operatia show: deschide fereastra principala a aplicatiei
 % ~~~~~~~~~~~~~~
 %
-% - checks if window already exists
+% - verifica daca fereastra exista deja
 %
 if strcmp(operation,'show')
    existFlag =  fig_exist('Noise');
@@ -80,10 +79,8 @@ if strcmp(operation,'show')
       noise('init_noise');
    end
 %
-% Operation SYSTEM
+% operatia system: actualizeaza calculele si graficele pentru sistemul ales
 % ~~~~~~~~~~~~~~~~
-%
-% - otherwise, draw the window 
 %
 elseif strcmp(operation,'system') 
    watchon;
@@ -91,16 +88,13 @@ elseif strcmp(operation,'system')
    set(error_noise,'Visible','off');
    h = 1;
    %
-   % - make plots go clear after next updating
+   % - stergerea graficelor vechi inainte de actualizare
    %
-   %set(cov_handle,'EraseMode','XOR');
-   %set(spectr_handle,'EraseMode','XOR');
-   %set(realiz_handle,'EraseMode','XOR');
    if get(system_noise,'value')==1
       axes(disc_axes_noise);
       cla;
       %
-      % - plot unit circle
+      % - desenarea cercului unitar
       %
       t=0:.1:6.3;			
       plot(sin(t),cos(t),'k-');
@@ -111,22 +105,24 @@ elseif strcmp(operation,'system')
       axes(realization_axes);
       cla;
    elseif get(system_noise,'value')==2
+      % setari pentru sistem de ordin 1
       Ad = [1 -0.5];
       a1 = -0.5;
       %
-      % - gives var(y)=1
+      % - asigura varianta unitara
       %
       Bd1 = 1;
       Bd = sqrt(1-a1^2);
       [phi,gam,C,~] = tf2ss(Bd,Ad);     
    elseif get(system_noise,'Value')==3
+      % setari pentru sistem de ordin 2
       Ad = [1 -0.3 0.1];
       Bd1 = [1 -0.5];
       a1 = -0.3;
       a2 = 0.1;
       b1 = -0.5;
       %
-      % - gives var(y)=1
+      % - asigura varianta unitara
       %
       vary = ((1+b1^2)*(1+a2)-2*b1*a1)/...
              ((1-a2^2)*(1+a2)-(a1-a1*a2)*a1);
@@ -140,12 +136,12 @@ elseif strcmp(operation,'system')
       axes(disc_axes_noise);
       cla;
       %
-      % - plot unit circle
+      % - redesenarea cercului unitar si a polilor/zerourilor
       %
       t=0:.1:6.3;			
       plot(sin(t),cos(t),'k-');
       %
-      % - plot poles and zeros of sampled system
+      % - afisarea polilor si zerourilor sistemului esantionat
       %
       if ccs_col==1
          pole = plot(real(roots(Ad)),imag(roots(Ad)),'rx');
@@ -163,12 +159,12 @@ elseif strcmp(operation,'system')
                   'Markersize',7);
       end
       %
-      % - makes poles movable
+      % - setarea functiilor de callback pentru polii si zerourile mobile
       %
       set(pole,'ButtonDownFcn','noise(''move_p'')');
       set(zero,'ButtonDownFcn','noise(''move_z'')');
       %
-      % - calculates covariance function
+      % - calculul functiei de autocovarianta ry
       %
       ry = zeros(20,1);
       tau = 20;
@@ -180,17 +176,17 @@ elseif strcmp(operation,'system')
       end
       axes(cov_axes);
       %
-      % - plot covariance function
+      % - afisarea grafica a autocovariantei
       %
       set(cov_handle,'XData',0:tau,'YData',ry);
       set(cov_handle,'LineWidth',2 );
       %
-      % - calculate spectrum
+      % - calculul densitatii spectrale
       %
       [w_ab,fi_ab]=d_spektr(Ad,Bd,1);
 
       %
-      % - plot spectrum
+      % - afisarea grafica a spectrului
       %
       axes(spectrum_axes);
       set(spectr_handle,'XData',w_ab,'YData',fi_ab);

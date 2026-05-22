@@ -28,11 +28,15 @@ function [w,fi]=d_spektr(A,B,sigma2)
 %
 % BEGIN
 %
+% generarea axei de frecvente in scara logaritmica
 lgw1=-2;
 w=logspace(lgw1,pi)';
+% calculul raspunsului in frecventa pentru pulsatii pozitive
 Hp=freqz(B,A,w);
 wm=-w;
+% calculul raspunsului in frecventa pentru pulsatii negative
 Hm=freqz(B,A,wm);
+% calculul densitatii spectrale conform formulei
 fi=sigma2*(Hp.*Hm)/(2*pi);
 % 
 % END

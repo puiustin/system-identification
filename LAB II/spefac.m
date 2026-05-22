@@ -34,6 +34,7 @@ function [a,l2]=spefac(r)
 %
 % BEGIN
 %
+% verificarea daca secventa r este pozitiv definita
 if r(1)<max(abs(r))
     error('### r is not positive definite') ; 
 end
@@ -42,9 +43,11 @@ if n<n2
     n=n2;
     r=r';
 end
+% initializarea coeficientilor si a pragului de convergenta
 a=r'/sqrt(r(1));
 da=1;
 k=0;
+% bucla iterativa pentru gasirea factorului spectral
 while da>1e-14
     k=k+1;
     aa = zeros(n, n);
@@ -53,12 +56,13 @@ while da>1e-14
     end
     x=2*(aa\r);
     a1=(a+x')/2;
-    da=norm(a1-a);
+    da=norm(a1-a); % calculul diferentei dintre iteratii
     a=a1;
     if k==50
         error('### Convergence too slow.');
     end
 end
+% calculul variantei si normalizarea coeficientilor
 l2=a(1)^2; 
 a = a/a(1);
 % 

@@ -34,11 +34,7 @@ function ISLAB_2A(C,A,N,tau_max,nr)
 %                 Department of Automatic Control & Computer Science
 %
 
-%
-% BEGIN
-% 
-% Setting the defaults
-% ~~~~~~~~~~~~~~~~~~~~
+% setarea valorilor implicite pentru parametri
 lam=1;
 if nargin<5
    nr=1;
@@ -71,7 +67,7 @@ if isempty(A)
    A=1;
 end
 % 
-% Faults preventing
+% prevenirea erorilor prin verificarea lungimii polinoamelor
 % ~~~~~~~~~~~~~~~~~
 if length(A)<2
    a=0; 
@@ -84,35 +80,35 @@ else
    c=C(2);
 end
 % 
-% Computing the estimated response
+% calculul raspunsului estimat
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 tau=[1:tau_max]';
 tau_vec=[0;tau];
-e=randn(N,nr);
-sys= filt(C,A,1);
+e=randn(N,nr); % generare zgomot alb
+sys= filt(C,A,1); % definire sistem liniar discret
 %r_e = zeros( length(e) - tau_max + 1, nr);
 for n=1:nr
-  yn=lsim(sys,e(:,n));
-  [tmp,~]=xcov(yn,tau_max,'unbiased');
+  yn=lsim(sys,e(:,n)); % simulare raspuns sistem la zgomot
+  [tmp,~]=xcov(yn,tau_max,'unbiased'); % estimare functie de autocovarianta
   r_e(:,n)=tmp(tau_max+1:end);
 end
 % 
-% Computing the true response
+% calculul raspunsului teoretic (valori adevarate)
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 r_t=lam/(1-a^2)*[(1+c^2-2*a*c); ...
                  (c-a)*(1-a*c)*(-a).^(tau-1)];
 % 
-% Plotting
+% afisarea grafica a rezultatelor
 % ~~~~~~~~
 NN=min(N,50);
 subplot(211)
-  plot(tau_vec,r_t,'r-',tau_vec,r_e,'b--');
+  plot(tau_vec,r_t,'r-',tau_vec,r_e,'b--'); % comparatie teoretic vs estimat
   hold on;
   legend('True','Estimated');
   title(['Covariance functions']);
   xlabel('k');
 subplot(212)
-  plot(yn(1:NN)); 
+  plot(yn(1:NN)); % afisare o realizare a procesului
   grid;
   title(['Realization (',num2str(NN),' samples)']);
   xlabel('Discrete time');

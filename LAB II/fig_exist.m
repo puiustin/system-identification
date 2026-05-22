@@ -19,20 +19,19 @@ function [ existFlag ] = fig_exist( LookFor)
 
 % BEGIN
 % 
-% check to see if the user input an argument
+% verificarea daca utilizatorul a introdus un argument
 if (nargin ~= 1)
     disp('No figure name has been given')
 end
 
-    % figflag
-    existFlag = 0; %% the figure might not exist, we are pesimistic :)
-    h = findobj(); %% get all object handles
+    % initializare flag existenta (presupunem initial ca nu exista)
+    existFlag = 0; 
+    h = findobj(); %% obtinerea tuturor obiectelor grafice
     for i = 1 : length(h)
-        %% check to see if each of them is a figure and if it the figure
-        %% of interest
+        %% verificam daca obiectul este de tip figura si daca are numele cautat
         if (strcmp(h(i).Type, 'figure') == 1 && ...
                 strcmp( h(i).Name, LookFor) == 1) 
-            existFlag = 1;
+            existFlag = 1; % figura a fost gasita
             break;
         end
     end
