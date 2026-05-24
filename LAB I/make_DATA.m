@@ -41,8 +41,8 @@
 %	   DATA.Ts = 1 ; 
 %	   DATA.OutputName = {'Minimum temperature' ; 
 %			      'Maximum temperature'} ; 
-%	   DATA.OutputUnit = {'ºC' ; 
-%			      'ºC'} ; 
+%	   DATA.OutputUnit = {'C' ; 
+%			      'C'} ; 
 %	Note: The field DATA.Tstart cannot be set unless the sampling is uniform. 
 %	      Non uniform sampling leaves the field empty. 
 %	      Shall the starting date of measurements has to be specified, 
@@ -67,6 +67,7 @@ function DATA = make_DATA(y)
 %
 % Messages 
 % ~~~~~~~~
+% mesaje afisate utilizatorului pentru colectarea datelor
         warning('off','MATLAB:dispatcher:InexactMatch') ; 
 	FN = '<MAKE_DATA>: ' ; 
 	E1 = [FN 'Missing or empty input data. Empty output. Exit.'] ; 
@@ -84,6 +85,7 @@ function DATA = make_DATA(y)
 %
 % Faults preventing 
 % ~~~~~~~~~~~~~~~~~
+% verificari pentru a evita erorile daca datele lipsesc
 	DATA = iddata ; 
 	if (nargin < 1)
 	   war_err(E1) ; 
@@ -96,44 +98,45 @@ function DATA = make_DATA(y)
 %
 % Building the DATA object
 % ~~~~~~~~~~~~~~~~~~~~~~~~
+% constructia propriu-zisa a obiectului iddata
 %
-	if (isscalar(y) || isvector(y))		% Storing the data ...
+	if (isscalar(y) || isvector(y))		% daca y e vector, il salvam ca iesire singura
 	   DATA.y = vectorize(y).' ; 
-	   DATA.Ts = 1 ; 			% the sampling period ...
+	   DATA.Ts = 1 ; 			% perioada de esantionare implicita este 1
 	else
-	   DATA.y = y(:,2:end) ;
-	   DATA.SamplingInstants = y(:,1) ; 	% and the sampling instants (if any). 
+	   DATA.y = y(:,2:end) ;            % daca y e matrice, prima coloana e timpul, restul sunt iesiri
+	   DATA.SamplingInstants = y(:,1) ; 	% salvam momentele de timp de pe prima coloana
 	end 
 	war_err(FN) ;
-	DATA.Name = input(I1,'s') ; 		% Setting the name of data block. 
+	DATA.Name = input(I1,'s') ; 		% nume set de date de la tastatura
 	if (isempty(DATA.Name))
 	   DATA.Name = 'DATA' ; 
 	end 
-	DATA.Notes = input(I2,'s') ; 		% Setting the notes on data (what they mean).
-	DATA.ExperimentName = {input(I3,'s')} ;	% Setting the name of experiment or supplementary information. 
-	DATA.TimeUnit = input(I4,'s') ; 	% Setting the time unit (e.g. ms, s, hours, days, etc.)
-	if (~isempty(DATA.Ts)) 			% Setting the starting date and/or time 
-	   FN = input(I5,'s') ;			% (only allowed for uniform sampling). 
+	DATA.Notes = input(I2,'s') ; 		% notite despre ce reprezinta datele
+	DATA.ExperimentName = {input(I3,'s')} ;	% numele experimentului de masurare
+	DATA.TimeUnit = input(I4,'s') ; 	% unitatea de timp (secunde, minute etc.)
+	if (~isempty(DATA.Ts)) 			% setam data de start doar pentru esantionare uniforma
+	   FN = input(I5,'s') ;
 	   if (isempty(FN))
 	      DATA.Tstart = now ; 
 	   else
 	      DATA.Tstart = datenum(FN) ; 
 	   end 
-	else					% Here the starting date can be specified as a string 
-	   DATA.UserData = input(I6,'s') ; 	% in a preferred format (such as 'dd-Mmm-yyyy'). 
+	else					% daca esantionarea e neuniforma, folosim userdata pentru info start
+	   DATA.UserData = input(I6,'s') ; 
 	end  
 	EN = size(DATA.y,2) ; 
-	FN = input(sprintf(I7,1),'s') ; 	% Setting the name of each output channel. 
-	BL = input(sprintf(I8,1),'s') ; 	% Setting the unit of each output channel. 
+	FN = input(sprintf(I7,1),'s') ; 	% nume pentru primul canal de iesire
+	BL = input(sprintf(I8,1),'s') ; 	% unitate pentru primul canal de iesire
 	for (n=2:EN)
-	   FN = [FN ; {input(sprintf(I7,n),'s')}] ; 
-	   BL = [BL ; {input(sprintf(I8,n),'s')}] ; 
+	   FN = [FN ; {input(sprintf(I7,n),'s')}] ; % adaugam nume pentru restul canalelor
+	   BL = [BL ; {input(sprintf(I8,n),'s')}] ; % adaugam unitati pentru restul canalelor
 	end 
 	DATA.OutputName = FN ; 
 	DATA.OutputUnit = BL ; 
-%	DATA.Domain = 'Time' ; 			% Data are in time domain. 
+%	DATA.Domain = 'Time' ; 			% datele sunt in domeniul timp
 	Y = DATA ; 
-	eval(['save ' DATA.Name '.mat Y']) ;	% Save the DATA object. 
+	eval(['save ' DATA.Name '.mat Y']) ;	% salvam obiectul final intr-un fisier .mat
 	war_err(sprintf(S,DATA.Name)) ; 
 %
 %  END

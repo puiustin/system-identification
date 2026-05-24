@@ -1,0 +1,3 @@
+global FIG
+FIG = 1;
+ISLAB_12A
