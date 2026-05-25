@@ -4,7 +4,6 @@ clear
 close all;
 [Mid2,Did2,Dva2] = ISLAB_6C(); 
 %%
-
 clc
 clear
 close all;
