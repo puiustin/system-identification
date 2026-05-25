@@ -1,205 +1,117 @@
 function [F,D,M] = ISLAB_12A(mt,K0,T0,Tmax,Ts,U,lambda) 
 %
-% ISLAB_12A   Module that performs off-line identification of 
-%             physical parameters of a DC engine (gain and 
-%             time constant). The parameters are CONSTANT here. 
-%
-% Inputs:	mt     # model type: 
-%                         0 -> OE (default)
-%                         1 -> ARX
-%               K0     # constant gain (4, by default)
-%               T0     # constant time constant (0.5 s, by default)
-%               Tmax   # simulation duration 
-%                        (80 s, by default)
-%               Ts     # sampling period
-%                        (0.1 s, by default) 
-%               U      # amplitude of input square wave 
-%                        (0.5, by default) 
-%               lambda # standard deviation of white noise 
-%                        (1, by default)
-%
-% Outputs:      F      # structure representing the estimated 
-%                        physical parameters: 
-%                          F.K  -> gain
-%                          F.T  -> time constant
-%               D      # IDDATA object representing the I/O data 
-%                        employed in identification
-%               M      # IDMODEL object representing the estimated 
-%                        discrete time model 
-%
-% Explanation:	A second order continuous transfer function 
-%               with a null pole, gain K and time constant T 
-%               (the model of a DC engine) is stimulated with 
-%               a square wave in order to provide identification 
-%               data. Constant parameters K and T are identified 
-%               by discretizing the transfer function.  
-%               (See the function GDATA_DCENG.)
-%
-% Author:   Dan Stefanoiu (*)
-% Revised:  Dan Stefanoiu (*)
-%           Lavinius Ioan Gliga (*)
-%
-% Created: April 29, 2004
-% Revised: January 30, 2012
-%          August 9, 2018
-%
-% Copyright: (*) "Politehnica" University of Bucharest, ROMANIA
-%                Department of Automatic Control & Computer Science
-%
-
-%
 % BEGIN
-% 
+%
 
-global FIG ;			% Figure number handler 
-FIG = 1;            
-
-% 
 % Messages
-% ~~~~~~~~
 FN = '<ISLAB_12A>: ' ; 
 NFN = length(FN) ; 
 PK = [blanks(70) '<Press a key>'] ; 
 M1 = [FN 'Physical parameters:'] ; 
 M2 = [blanks(NFN+7) 'True' blanks(8) 'Estimated'] ; 
-M3 = [blanks(NFN) 'K: %8.4f' blanks(6) '%8.4f \n'] ; 
-M4 = [blanks(NFN) 'T: %8.4f' blanks(6) '%8.4f \n'] ; 
-% 
+M3 = [blanks(NFN) 'K: %8.4f' blanks(6) '%8.4f'] ; 
+M4 = [blanks(NFN) 'T: %8.4f' blanks(6) '%8.4f'] ; 
+
 % Faults preventing
-% ~~~~~~~~~~~~~~~~~
-if (nargin < 7)
-   lambda = 1 ;
-end 
-if (isempty(lambda))
-   lambda = 1 ;
-end 
+if (nargin < 7), lambda = 1 ; end
+if (isempty(lambda)), lambda = 1 ; end
 lambda = abs(lambda(1)) ; 
-if (~lambda)
-   lambda = 1 ; 
-end 
-if (nargin < 6)
-   U = 0.5 ;
-end
-if (isempty(U))
-   U = 0.5 ;
-end 
+if (~lambda), lambda = 1 ; end
+
+if (nargin < 6), U = 0.5 ; end
+if (isempty(U)), U = 0.5 ; end
 U = U(1) ; 
-if (abs(U)<eps)
-   U = 0.5 ;
-end 
-if (nargin < 5)
-   Ts = 0.1 ;
-end 
-if (isempty(Ts))
-   Ts = 0.1 ;
-end 
+if (abs(U) < eps), U = 0.5 ; end
+
+if (nargin < 5), Ts = 0.1 ; end
+if (isempty(Ts)), Ts = 0.1 ; end
 Ts = abs(Ts(1)) ; 
-if (Ts<eps)
-   Ts = 0.1 ;
-end  
-if (nargin < 4)
-   Tmax = 80 ;
-end 
-if (isempty(Ts))
-   Tmax = 80 ;
-end 
+if (Ts < eps), Ts = 0.1 ; end
+
+if (nargin < 4), Tmax = 80 ; end
+if (isempty(Tmax)), Tmax = 80 ; end
 Tmax = abs(Tmax(1)) ; 
-if (Tmax<eps)
-   Tmax = 80 ;
-end 
-Tmax = max(250*Ts,Tmax) ; 
-if (nargin < 3) 
-   T0 = 0.5 ;
-end 
-if (isempty(T0))
-   T0 = 0.5 ;
-end 
+if (Tmax < eps), Tmax = 80 ; end
+Tmax = max(250*Ts, Tmax) ; 
+
+if (nargin < 3), T0 = 0.5 ; end
+if (isempty(T0)), T0 = 0.5 ; end
 T0 = T0(1) ; 
-if (abs(T0)<eps)
-   T0 = 0.5 ; 
-end 
-if (nargin < 2) 
-   K0 = 4 ;
-end
-if (isempty(K0))
-   K0 = 4 ;
-end  
+if (abs(T0) < eps), T0 = 0.5 ; end
+
+if (nargin < 2), K0 = 4 ; end
+if (isempty(K0)), K0 = 4 ; end
 K0 = K0(1) ; 
-if (abs(K0)<eps)
-   K0 = 4 ; 
-end 
-if (nargin < 1)
-   mt = 0 ;
-end
-if (isempty(mt))
-   mt = 0 ;
-end 
+if (abs(K0) < eps), K0 = 4 ; end
+
+if (nargin < 1), mt = 0 ; end
+if (isempty(mt)), mt = 0 ; end
 mt = abs(round(mt(1))) ; 
-% 
+
 % Generate identification data 
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 [D,V] = gdata_DCeng(0,K0,T0,Tmax,Ts,U,lambda) ; 
-% 
+
 % Estimate discrete time parameters
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if (~mt)
-   M = oe(D,[2 2 1]) ; 	        % Model of tipe OE. 
+   M = oe(D,[2 2 1]) ;          % OE model
 else
-   M = arx(D,[2 2 1]) ;         % Model of type ARX. 
-end 
-% 
-% Estimate physical parameters
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if (~mt)                        % OE model. 
-   F.K = sum(M.b)/(1-M.f(3))/Ts ; 
-   F.T = Ts*(M.f(3)*M.b(2)+M.b(3))/sum(M.b)/(1-M.f(3)) ; 
-%   F.T = -Ts/log(M.f(3)) ; 
-else                            % ARX model.
-   F.K = sum(M.b)/(1-M.a(3))/Ts ; 
-   F.T = Ts*(M.a(3)*M.b(2)+M.b(3))/sum(M.b)/(1-M.a(3)) ; 
-%   F.T = -Ts/log(M.a(3)) ; 
-end 
-% 
+   M = arx(D,[2 2 1]) ;         % ARX model
+end
+
+% Estimate physical parameters from discrete model coefficients
+% Based on Euler discretization of H(s) = K / (s*(1+T*s))
+% Hd(z) = (b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
+% K = (b1+b2) / (Ts*(1-a2))
+% T = Ts * (a2*b1 + b2) / ((b1+b2)*(1-a2))
+if (~mt)                        % OE model: theta = [f1 f2 b1 b2]
+   b1 = M.b(2) ; b2 = M.b(3) ;
+   a2 = M.f(3) ;                % f2 coefficient (= -a2 in standard form)
+   F.K = (b1 + b2) / (Ts * (1 - a2)) ;
+   F.T = Ts * (a2*b1 + b2) / ((b1 + b2) * (1 - a2)) ;
+else                            % ARX model: theta = [a1 a2 b1 b2]
+   b1 = M.b(2) ; b2 = M.b(3) ;
+   a2 = M.a(3) ;
+   F.K = (b1 + b2) / (Ts * (1 - a2)) ;
+   F.T = Ts * (a2*b1 + b2) / ((b1 + b2) * (1 - a2)) ;
+end
+
 % Display physical parameters
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-war_err(M1) ; 
+disp(M1) ; 
 disp(M2) ; 
-fprintf(1, M3, K0, F.K);
-fprintf(1, M4, T0, F.T);
-war_err(PK) ; 
+disp(sprintf(M3, K0, F.K)) ; 
+disp(sprintf(M4, T0, F.T)) ; 
+disp(PK) ; 
 pause ;
-% 
+
 % Plot I/O data
-% ~~~~~~~~~~~~~
-Tmax = Ts*round(Tmax/Ts) ; 	% Correct Tmax. 
-t = 0:Ts:Tmax ; 		% Set time axis. 
-figure(FIG),clf
-   fig_look(FIG,1.5) ; 
-   plot(t,D.u,'-b',t,D.y,'-r') ; 
-   FN = scaling([D.u D.y]) ;     % Re-scale the axes. 
-   axis([0 Tmax FN]) ; 
+Tmax = Ts*round(Tmax/Ts) ;
+t = 0:Ts:Tmax ;
+FIG = 10 ;
+figure(FIG), clf
+   plot(t, D.u, '-b', t, D.y, '-r') ; 
+   FN2 = [min([D.u; D.y])-0.5, max([D.u; D.y])+0.5] ;
+   axis([0 Tmax FN2]) ; 
    title('Input-output data provided by a DC engine.') ; 
    xlabel('Time [s]') ; 
    ylabel('Magnitude') ; 
-   set(FIG,'DefaultTextHorizontalAlignment','left') ; 
-   legend('input (square wave)','output') ; 
-FIG = FIG+1 ;
-% 
-% Plot I/O simulated data
-% ~~~~~~~~~~~~~~~~~~~~~~~
-V.y = sim(M,[D.u zeros(size(D.u))]) ; 
-figure(FIG),clf
-   fig_look(FIG,1.5) ; 
-   plot(t,V.y,'-b',t,D.y,'-r',t,V.y,'-b') ; 
-   FN = scaling([V.y D.y]) ;     % Re-scale the axes. 
-   axis([0 Tmax FN]) ; 
-   title(['Output data provided by a DC engine ' ... 
-          'and its discrete model.']) ; 
+   legend('input (square wave)', 'output', 0) ; 
+FIG = FIG + 1 ;
+
+% Plot simulated vs measured output
+V.y = sim(M, [D.u zeros(size(D.u))]) ; 
+figure(FIG), clf
+   plot(t, V.y, '-b', t, D.y, '-r') ; 
+   FN2 = [min([V.y; D.y])-0.5, max([V.y; D.y])+0.5] ;
+   axis([0 Tmax FN2]) ; 
+   title('Output data provided by a DC engine and its discrete model.') ; 
    xlabel('Time [s]') ; 
    ylabel('Magnitude') ; 
-   set(FIG,'DefaultTextHorizontalAlignment','left') ; 
-   legend('simulated output','measured output') ; 
-FIG = FIG+1 ;
+   legend('simulated output', 'measured output', 0) ; 
+FIG = FIG + 1 ;
+
+disp(PK) ;
+pause ;
+
 %
 % END
 %
