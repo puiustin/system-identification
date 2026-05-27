@@ -10,13 +10,13 @@ t = (0:N-1)' * Ts;  % vectorul de timp generat pe coloana
 y = [t, randn(N,3)];    % avem in total 3 canale de iesire
 
 % generarea datelor de intrare (u)
-% generam o matrice cu 5 coloane (5 canale de intrare)
-u = randn(N,5);      
+% generam o matrice cu  coloane (2 canale de intrare)
+u = randn(N,2);      
 
 % apelam functia creata pentru a genera obiectul iddata mimo
 % y contine timpul si iesirile, u contine intrarile
 DATA = make_IDDATA_MIMO(y,u);
 
 % afisare rezultat in consola pentru verificare
-disp('test mimo cu 3 iesiri si 5 intrari:');
+disp('test mimo cu 3 iesiri si 2 intrari:');
 disp(DATA);
