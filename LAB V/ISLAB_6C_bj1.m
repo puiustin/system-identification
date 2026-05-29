@@ -20,7 +20,7 @@ FIG = 1;
 % Constants
 % ~~~~~~~~~
 alpha = 3 ;			% Weighting factor of confidence disks radius. 
-pf = 1 ; 			% Plot flag: 0=no, 1=yes. 
+pf = 0 ; 			% Plot flag: 0=no, 1=yes. 
 Nb = 3 ;			% Maximum index of B part. 
 Nc = 3 ;			% Maximum index of C part. 
 Nf = 3 ;			% Maximum index of F part.

@@ -1,282 +1,398 @@
-function [F,ID,SD,MODEL_BEST] = ISLAB_12F(alpha_c,beta_c,K0,T0,Tmax,Ts,U,lambda) 
+function [F,ID,SD] = ISLAB_12F(K0,T0,Tmax,Ts,U,lambda)
+%
+% ISLAB_12F   Identificarea recursiva a parametrilor variabili K si T
+%             folosind rpem si reprezentarea pe stare.
+%
+
 %
 % BEGIN
 %
 
-% Constants
-cv = 1 ;    % variable parameters
+global FIG ;
+FIG = 1 ;
 
-% Messages
-FN_str = '<ISLAB_12F>: ' ;
-WB = [FN_str 'Recursive state-space estimation. This may take a minute. Please wait ...'] ;
-WE = [blanks(length(FN_str)) '... Done.'] ;
-PK = [blanks(70) '<Press a key>'] ;
+cv = 1 ;
 
-% Faults preventing
-if (nargin < 8), lambda = 1 ; end
-if (isempty(lambda)), lambda = 1 ; end
+alpha = 0.1 ;
+beta  = 0.1 ;
+
+FN = '<ISLAB_12F>: ' ;
+WB = [FN 'Recursive state-space estimation using rpem. Please wait ...'] ;
+WE = [blanks(length(FN)) '... Done.'] ;
+
+if (nargin < 6)
+   lambda = 1 ;
+end
+if (isempty(lambda))
+   lambda = 1 ;
+end
 lambda = abs(lambda(1)) ;
-if (~lambda), lambda = 1 ; end
 
-if (nargin < 7), U = 0.5 ; end
-if (isempty(U)), U = 0.5 ; end
-U = U(1) ;
-if (abs(U) < eps), U = 0.5 ; end
-
-if (nargin < 6), Ts = 0.1 ; end
-if (isempty(Ts)), Ts = 0.1 ; end
-Ts = abs(Ts(1)) ;
-if (Ts < eps), Ts = 0.1 ; end
-
-if (nargin < 5), Tmax = 80 ; end
-if (isempty(Tmax)), Tmax = 80 ; end
-Tmax = abs(Tmax(1)) ;
-if (Tmax < eps), Tmax = 80 ; end
-Tmax = max(250*Ts, Tmax) ;
-
-if (nargin < 4), T0 = 0.5 ; end
-if (isempty(T0)), T0 = 0.5 ; end
-T0 = T0(1) ;
-if (abs(T0) < eps), T0 = 0.5 ; end
-
-if (nargin < 3), K0 = 4 ; end
-if (isempty(K0)), K0 = 4 ; end
-K0 = K0(1) ;
-if (abs(K0) < eps), K0 = 4 ; end
-
-if (nargin < 2), beta_c = 1 ; end
-if (isempty(beta_c)), beta_c = 1 ; end
-beta_c = beta_c(1) ;
-if (abs(beta_c) < eps)
-   warning([FN_str 'beta_c=0 would cause K=0. Reset to 1.']) ;
-   beta_c = 1 ;
+if (nargin < 5)
+   U = 0.5 ;
+end
+if (isempty(U))
+   U = 0.5 ;
 end
 
-if (nargin < 1), alpha_c = 1 ; end
-if (isempty(alpha_c)), alpha_c = 1 ; end
-alpha_c = alpha_c(1) ;
-if (abs(alpha_c) < eps)
-   warning([FN_str 'alpha_c=0 would cause K=0. Reset to 1.']) ;
-   alpha_c = 1 ;
+if (nargin < 4)
+   Ts = 0.1 ;
+end
+if (isempty(Ts))
+   Ts = 0.1 ;
 end
 
-% Generate identification data
-disp(WB) ;
+if (nargin < 3)
+   Tmax = 80 ;
+end
+if (isempty(Tmax))
+   Tmax = 80 ;
+end
+
+if (nargin < 2)
+   T0 = 0.5 ;
+end
+if (isempty(T0))
+   T0 = 0.5 ;
+end
+
+if (nargin < 1)
+   K0 = 4 ;
+end
+if (isempty(K0))
+   K0 = 4 ;
+end
+
+war_err(WB) ;
+
 [ID,V,P] = gdata_DCeng(cv,K0,T0,Tmax,Ts,U,lambda) ;
 
-if (~cv)
-   P.num{1} = K0 * ones(1,length(ID.y)) ;
-   P.den{1} = T0 * ones(1,length(ID.y)) ;
-end
-
-% ================================================================
-% Recursive state-space identification using rpem
-% Model order 2 (DC engine has 2 states)
-% rpem structure for state-space: use n4sid as initial model,
-% then rpem recursively updates.
-%
-% rpem([na nb nc nd nf nk]) for Box-Jenkins / OE-like:
-%   For a state-space model of order 2 with 1 input, 1 output:
-%   use rpem(ID, 2, 'ff', 0.999) with integer order argument.
-% ================================================================
-[theta, SD] = rpem(ID, 2, 'ff', 0.999) ;
-
-disp(WE) ;
-SD = iddata(SD, V.u, Ts) ;
-
-% ================================================================
-% Extract physical parameters from rpem output
-% rpem with integer order returns a structure array of idss models.
-% For each time step n, theta(n) is an idss model.
-% We extract A(1,1), A(2,1), B(1,1) from each step.
-%
-% theta1[n] = (A_d[n](1,1) - 1) / Ts
-% theta2[n] = B_d[n](1,1) / Ts
-% T[n] = -1/theta1[n]
-% K[n] = -(alpha_c * beta_c * theta2[n]) / theta1[n]
-% ================================================================
-N_steps = length(theta) ;
-F.K = zeros(N_steps,1) ;
-F.T = zeros(N_steps,1) ;
-
-for n = 1:N_steps
-   An = theta(n).A ;
-   Bn = theta(n).B ;
-   theta1_n = (An(1,1) - 1) / Ts ;
-   theta2_n = Bn(1,1) / Ts ;
-   if abs(theta1_n) < eps
-      F.T(n) = F.T(max(1,n-1)) ;   % hold previous value
-      F.K(n) = F.K(max(1,n-1)) ;
-   else
-      F.T(n) = -1 / theta1_n ;
-      F.K(n) = -(alpha_c * beta_c * theta2_n) / theta1_n ;
-   end
-end
-
-% Time axis
 Tmax = Ts*round(Tmax/Ts) ;
-t = (0:Ts:Tmax)' ;
-N = length(t) ;
+t = 0:Ts:Tmax ;
+N = length(ID.y) ;
 
-% ================================================================
-% Colored noise signals
-% ================================================================
-v_y = ID.y - SD.y ;
-v_K = P.num{1}' - F.K ;
-v_T = P.den{1}' - F.T ;
+%
+% Identificare recursiva cu rpem
+% Model discret de tip OE/BJ:
+% B(q)/F(q), cu model de zgomot C(q)
+%
 
-sigma2_vy = cumsum(v_y.^2) ./ (1:N)' ;
-sigma2_vK = cumsum(v_K.^2) ./ (1:N)' ;
-sigma2_vT = cumsum(v_T.^2) ./ (1:N)' ;
+na = 0 ;
+nb = 2 ;
+nc = 1 ;
+nd = 0 ;
+nf = 2 ;
+nk = 1 ;
 
-% ---- Figure 1: I/O data ----
-FIG = 10 ;
-figure(FIG), clf
-   plot(t, ID.u, '-b', t, ID.y, '-r') ;
+theta = rpem(ID,[na nb nc nd nf nk],'ff',0.999) ;
+
+war_err(WE) ;
+
+%
+% Coeficientii estimati recursiv:
+% theta = [b1 b2 c1 f1 f2]
+%
+
+b1 = theta(:,1) ;
+b2 = theta(:,2) ;
+c1 = theta(:,3) ;
+f1 = theta(:,4) ;
+f2 = theta(:,5) ;
+
+%
+% Parametrii fizici K si T
+%
+
+F.K = (b1+b2)./(1-f2)/Ts ;
+F.T = Ts*(f2.*b1+b2)./(b1+b2)./(1-f2) ;
+
+F.K(~isfinite(F.K)) = K0 ;
+F.T(~isfinite(F.T)) = T0 ;
+F.T(F.T<=0) = T0 ;
+
+%
+% Simulare iesire folosind modelul discret recursiv identificat
+%
+
+ys = zeros(N,1) ;
+
+for k = 3:N
+
+   ys(k) = -f1(k)*ys(k-1) - f2(k)*ys(k-2) + ...
+            b1(k)*ID.u(k-1) + b2(k)*ID.u(k-2) ;
+
+   if (~isfinite(ys(k)))
+      ys(k) = ys(k-1) ;
+   end
+
+end
+
+SD = iddata(ys,V.u,Ts) ;
+
+%
+% Grafice date I/O
+%
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,ID.u,'-b',t,ID.y,'-r') ;
+   FN2 = scaling([ID.u ID.y]) ;
+   axis([0 Tmax FN2]) ;
    title('Input-output data provided by a DC engine.') ;
-   xlabel('Time [s]') ; ylabel('Magnitude') ;
-   legend('input (square wave)', 'output', 0) ;
-FIG = FIG + 1 ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('input (square wave)','output') ;
+FIG = FIG+1 ;
 
-% ---- Figure 2: simulated vs measured + v_y + sigma^2_vy ----
-figure(FIG), clf
-   subplot(3,1,1)
-      plot(t, SD.y, '-b', t, ID.y, '-r') ;
-      title('Simulated (state-space rpem) vs measured output.') ;
-      xlabel('Time [s]') ; ylabel('Magnitude') ;
-      legend('simulated output', 'measured output', 0) ;
-   subplot(3,1,2)
-      plot(t, v_y, '-k') ;
-      title(sprintf('Colored noise v_y  (\\sigma^2 = %.4f)', var(v_y))) ;
-      xlabel('Time [s]') ; ylabel('v_y') ;
-   subplot(3,1,3)
-      plot(t, sigma2_vy, '-m') ;
-      yline(var(v_y), '--r', sprintf('\\sigma^2_v = %.4f', var(v_y))) ;
-      title('Running variance \sigma^2(n) of v_y') ;
-      xlabel('Time [s]') ; ylabel('\sigma^2') ;
-FIG = FIG + 1 ;
+%
+% Iesire simulata vs iesire masurata
+%
 
-disp(PK) ;
-pause ;
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,SD.y,'-b',t,ID.y,'-r',t,SD.y,'-b') ;
+   FN2 = scaling([SD.y ID.y]) ;
+   axis([0 Tmax FN2]) ;
+   title('Output data provided by a DC engine and its state-space model.') ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('simulated output','measured output') ;
+FIG = FIG+1 ;
 
-% ---- Figure 3: parameter tracking + tracking errors ----
-figure(FIG), clf
-   subplot(2,2,1)
-      plot(t, F.K, '-b', t, P.num{1}', '-r') ;
-      title('Gain K: estimated vs true') ;
-      xlabel('Time [s]') ; ylabel('Gain K') ;
-      legend('estimated', 'true', 0) ;
-   subplot(2,2,2)
-      plot(t, F.T, '-b', t, P.den{1}', '-r') ;
-      title('Time constant T: estimated vs true') ;
-      xlabel('Time [s]') ; ylabel('T [s]') ;
-      legend('estimated', 'true', 0) ;
-   subplot(2,2,3)
-      plot(t, v_K, '-k') ;
-      title(sprintf('v_K = K_{true} - K_{est}  (\\sigma^2_K = %.4f)', var(v_K))) ;
-      xlabel('Time [s]') ; ylabel('v_K') ;
-   subplot(2,2,4)
-      plot(t, v_T, '-k') ;
-      title(sprintf('v_T = T_{true} - T_{est}  (\\sigma^2_T = %.4f)', var(v_T))) ;
-      xlabel('Time [s]') ; ylabel('v_T') ;
-FIG = FIG + 1 ;
+%
+% Variatia parametrilor fizici
+%
 
-% ---- Figure 4: steady-state zoom ----
-WE_idx = (t > 0.5*Tmax) ;
-t_ss = t(WE_idx) ;
-figure(FIG), clf
-   subplot(2,1,1)
-      plot(t_ss, F.K(WE_idx), '-b', t_ss, P.num{1}(WE_idx)', '-r') ;
-      title('Steady-state tracking: Gain K') ;
-      xlabel('Time [s]') ; ylabel('Gain K') ;
-      legend('estimated', 'true', 0) ;
-   subplot(2,1,2)
-      plot(t_ss, F.T(WE_idx), '-b', t_ss, P.den{1}(WE_idx)', '-r') ;
-      xlabel('Time [s]') ; ylabel('Time constant T [s]') ;
-      legend('estimated', 'true', 0) ;
-FIG = FIG + 1 ;
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
 
-disp(PK) ;
-pause ;
+   subplot(211)
+      plot(t,F.K,'-b',t,P.num{1},'-r') ;
+      FN2 = scaling([F.K P.num{1}']) ;
+      axis([0 Tmax FN2]) ;
+      title('Physical parameters variation (DC engine).') ;
+      xlabel('Time [s]') ;
+      ylabel('Gain K') ;
+      legend('estimated','true') ;
 
-% ================================================================
-% Adaptive ARMA noise identification for v_y
-% Note: rpem provides endogenous noise (K_ss matrix).
-%       Exogenous v_y must be identified separately.
-% 10 ARMA + 5 AR + 5 MA = 20 adaptive models (rarmax)
-% ================================================================
+   subplot(212)
+      plot(t,F.T,'-b',t,P.den{1},'-r') ;
+      FN2 = scaling([F.T P.den{1}']) ;
+      axis([0 Tmax FN2]) ;
+      xlabel('Time [s]') ;
+      ylabel('Time constant T [s]') ;
+
+FIG = FIG+1 ;
+
+%
+% Variatia parametrilor in regim stationar
+%
+
+WEz = (t>(0.5*Tmax)) ;
+tz = t(WEz) ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+
+   subplot(211)
+      plot(tz,F.K(WEz),'-b',tz,P.num{1}(WEz),'-r') ;
+      FN2 = scaling([F.K(WEz) P.num{1}(WEz)']) ;
+      axis([tz(1) Tmax FN2]) ;
+      title('Physical parameters variation - steady-state (DC engine).') ;
+      xlabel('Time [s]') ;
+      ylabel('Gain K') ;
+      legend('estimated','true') ;
+
+   subplot(212)
+      plot(tz,F.T(WEz),'-b',tz,P.den{1}(WEz),'-r') ;
+      FN2 = scaling([F.T(WEz) P.den{1}(WEz)']) ;
+      axis([tz(1) Tmax FN2]) ;
+      xlabel('Time [s]') ;
+      ylabel('Time constant T [s]') ;
+
+FIG = FIG+1 ;
+
+%
+% Zgomotul pe iesire
+%
+
+vy = ID.y - SD.y ;
+sigma2_y = var(vy) ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,vy,'-r') ;
+   FN2 = scaling(vy) ;
+   axis([0 Tmax FN2]) ;
+   title(['Output colored noise v_y, sigma_y^2 = ' num2str(sigma2_y)]) ;
+   xlabel('Time [s]') ;
+   ylabel('v_y') ;
+   legend(['sigma_y^2 = ' num2str(sigma2_y)]) ;
+FIG = FIG+1 ;
+
+%
+% Zgomotul parametrului K
+%
+
+trueK = P.num{1}(:) ;
+vK = trueK - F.K ;
+sigma2_K = var(vK) ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,vK,'-b') ;
+   FN2 = scaling(vK) ;
+   axis([0 Tmax FN2]) ;
+   title(['Parameter noise v_K, sigma_K^2 = ' num2str(sigma2_K)]) ;
+   xlabel('Time [s]') ;
+   ylabel('v_K') ;
+   legend(['sigma_K^2 = ' num2str(sigma2_K)]) ;
+FIG = FIG+1 ;
+
+%
+% Zgomotul parametrului T
+%
+
+trueT = P.den{1}(:) ;
+vT = trueT - F.T ;
+sigma2_T = var(vT) ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,vT,'-k') ;
+   FN2 = scaling(vT) ;
+   axis([0 Tmax FN2]) ;
+   title(['Parameter noise v_T, sigma_T^2 = ' num2str(sigma2_T)]) ;
+   xlabel('Time [s]') ;
+   ylabel('v_T') ;
+   legend(['sigma_T^2 = ' num2str(sigma2_T)]) ;
+FIG = FIG+1 ;
+
 disp(' ') ;
-disp('Identificarea adaptiva a zgomotului colorat v_y (exogen)') ;
-disp('Note: rpem ofera zgomot endogen (matricea K_ss).') ;
-disp('      Zgomotul exogen v_y este identificat separat cu rarmax.') ;
-disp(' ') ;
+disp([FN 'alpha = ' num2str(alpha)]) ;
+disp([FN 'beta = ' num2str(beta)]) ;
+disp([FN 'Noise polynomial C(q): 1 + c1*q^-1']) ;
+disp([FN 'Mean c1 = ' num2str(mean(c1))]) ;
+disp([FN 'Noise dispersions:']) ;
+disp(['sigma_y^2 = ' num2str(sigma2_y)]) ;
+disp(['sigma_K^2 = ' num2str(sigma2_K)]) ;
+disp(['sigma_T^2 = ' num2str(sigma2_T)]) ;
 
-ERR_DATA = iddata(v_y, [], Ts) ;
+%
+% Identificarea zgomotului colorat v_y cu modele ARMA/AR/MA
+%
 
-adm = 'ff' ;
-adg = 0.999 ;    % numeric forgetting factor
+best_lambda2 = inf ;
+best_e = vy ;
+best_vhat = vy ;
+best_name = 'none' ;
 
-% 10 ARMA adaptive models
-for i = 1:10
-   na = randi(20) ; nc = randi(20) ;
-   Mnoise(i) = rarmax(ERR_DATA, [na nc], adm, adg) ;
-   fprintf('ARMA model %2d: na=%d, nc=%d\n', i, na, nc) ;
-end
+rng('shuffle') ;
+NID = iddata(vy,[],Ts) ;
 
-% 5 AR adaptive models
-for i = 1:5
-   na = randi(20) ;
-   Mnoise(10+i) = rarmax(ERR_DATA, [na 0], adm, adg) ;
-   fprintf('AR   model %2d: na=%d\n', 10+i, na) ;
-end
+for k = 1:10
 
-% 5 MA adaptive models
-for i = 1:5
-   nc = randi(20) ;
-   Mnoise(15+i) = rarmax(ERR_DATA, [0 nc], adm, adg) ;
-   fprintf('MA   model %2d: nc=%d\n', 15+i, nc) ;
-end
+   na_n = randi([1 20]) ;
+   nc_n = randi([1 20]) ;
 
-% Select best model
-best_lambda2 = Inf ;
-best_idx = 1 ;
-lambda2_all = zeros(1,20) ;
-
-for i = 1:20
-   th = Mnoise(i) ;
-   th_last = th(end,:) ;
    try
-      lambda2_all(i) = var(v_y) / (1 + norm(th_last)^2) ;
+      NM = armax(NID,[na_n nc_n]) ;
+      eID = resid(NM,NID) ;
+      e_n = eID.OutputData ;
+      lambda2_n = var(e_n) ;
+
+      if (lambda2_n < best_lambda2)
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = vy - e_n ;
+         best_name = ['ARMA(' num2str(na_n) ',' num2str(nc_n) ')'] ;
+      end
+
    catch
-      lambda2_all(i) = Inf ;
    end
-   if lambda2_all(i) < best_lambda2
-      best_lambda2 = lambda2_all(i) ;
-      best_idx = i ;
-   end
-   fprintf('Model %2d: lambda^2 ~ %.6f\n', i, lambda2_all(i)) ;
+
 end
 
-fprintf('\nAutomatic best model: M%d\n', best_idx) ;
+for k = 1:5
 
-% ---- Figure 5: lambda^2 bar chart ----
-figure(FIG), clf
-   bar(lambda2_all) ;
-   hold on
-   bar(best_idx, lambda2_all(best_idx), 'r') ;
-   title('White noise variance \lambda^2 per adaptive noise model') ;
-   xlabel('Model index') ; ylabel('\lambda^2') ;
-   legend('Models', 'Best') ;
-FIG = FIG + 1 ;
+   na_n = randi([1 20]) ;
+
+   try
+      rv = xcorr(vy,na_n,'biased') ;
+      rv = rv(na_n+1:end) ;
+
+      [Aar,lambda2_n] = levinson(rv,na_n) ;
+      e_n = filter(Aar,1,vy) ;
+
+      if (lambda2_n < best_lambda2)
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = vy - e_n ;
+         best_name = ['AR(' num2str(na_n) ')'] ;
+      end
+
+   catch
+   end
+
+end
+
+for k = 1:5
+
+   nc_n = randi([1 20]) ;
+
+   try
+      NM = armax(NID,[0 nc_n]) ;
+      eID = resid(NM,NID) ;
+      e_n = eID.OutputData ;
+      lambda2_n = var(e_n) ;
+
+      if (lambda2_n < best_lambda2)
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = vy - e_n ;
+         best_name = ['MA(' num2str(nc_n) ')'] ;
+      end
+
+   catch
+   end
+
+end
 
 disp(' ') ;
-option = input(sprintf('Alegeti cel mai bun model (1->20) [automat: %d]: ', best_idx)) ;
-if isempty(option), option = best_idx ; end
-MODEL_BEST = Mnoise(option) ;
+disp([FN 'Best output noise model: ' best_name]) ;
+disp([FN 'lambda^2 = ' num2str(best_lambda2)]) ;
 
-fprintf('Modelul ales: M%d\n', option) ;
-disp(PK) ;
-pause ;
+%
+% Iesire masurata vs iesire cu zgomot colorat estimat
+%
+
+yhat_noise = SD.y + best_vhat ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,ID.y,'-r',t,yhat_noise,'-b') ;
+   FN2 = scaling([ID.y yhat_noise]) ;
+   axis([0 Tmax FN2]) ;
+   title('Measured output and output with estimated colored noise') ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('measured output',best_name) ;
+FIG = FIG+1 ;
+
+%
+% Zgomot alb estimat
+%
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,best_e,'-k') ;
+   FN2 = scaling(best_e) ;
+   axis([0 Tmax FN2]) ;
+   title(['Estimated white noise e, lambda^2 = ' num2str(best_lambda2)]) ;
+   xlabel('Time [s]') ;
+   ylabel('e') ;
+   legend(['lambda^2 = ' num2str(best_lambda2)]) ;
+FIG = FIG+1 ;
 
 %
 % END

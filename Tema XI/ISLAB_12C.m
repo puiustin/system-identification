@@ -1,240 +1,508 @@
-function [F,D,M,MODEL_BEST] = ISLAB_12C(mt,K0,T0,Tmax,Ts,U,lambda) 
+function [F,D,M] = ISLAB_12C(met,K0,T0,Tmax,Ts,U,lambda)
+%
+% ISLAB_12C   Mini-simulator that performs off-line identification of
+%             physical parameters of a DC engine using state-space models.
+%
+% Inputs: met    # identification method:
+%                    0 -> n4sid (default)
+%                    1 -> pem
+%         K0     # constant gain (4, by default)
+%         T0     # constant time constant (0.5 s, by default)
+%         Tmax   # simulation duration (80 s, by default)
+%         Ts     # sampling period (0.1 s, by default)
+%         U      # amplitude of input square wave (0.5, by default)
+%         lambda # standard deviation of white noise (1, by default)
+%
+% Outputs: F     # estimated physical parameters:
+%                    F.K -> gain
+%                    F.T -> time constant
+%         D      # IDDATA object representing the I/O data
+%         M      # estimated state-space model
+%
+
 %
 % BEGIN
 %
 
+global FIG ;
+FIG = 1 ;
+
+%
+% Constants
+% ~~~~~~~~~
+% .........................................
+% Freely chosen constants for state representation
+% These values are changed here when testing alpha and beta
+% .........................................
+alpha = 0.5 ;
+beta  = 0.5 ;
+% .........................................
+
+%
 % Messages
-FN_str = '<ISLAB_12C>: ' ;
-NFN = length(FN_str) ;
+% ~~~~~~~~
+FN = '<ISLAB_12C>: ' ;
+NFN = length(FN) ;
 PK = [blanks(70) '<Press a key>'] ;
-M1 = [FN_str 'Physical parameters:'] ;
+M1 = [FN 'Physical parameters:'] ;
 M2 = [blanks(NFN+7) 'True' blanks(8) 'Estimated'] ;
-M3 = [blanks(NFN) 'K: %8.4f' blanks(6) '%8.4f'] ;
-M4 = [blanks(NFN) 'T: %8.4f' blanks(6) '%8.4f'] ;
+M3 = [blanks(NFN) 'K: %8.4f' blanks(6) '%8.4f \n'] ;
+M4 = [blanks(NFN) 'T: %8.4f' blanks(6) '%8.4f \n'] ;
 
+%
 % Faults preventing
-if (nargin < 7), lambda = 1 ; end
-if (isempty(lambda)), lambda = 1 ; end
+% ~~~~~~~~~~~~~~~~~
+if (nargin < 7)
+   lambda = 1 ;
+end
+if (isempty(lambda))
+   lambda = 1 ;
+end
 lambda = abs(lambda(1)) ;
-if (~lambda), lambda = 1 ; end
+if (~lambda)
+   lambda = 1 ;
+end
 
-if (nargin < 6), U = 0.5 ; end
-if (isempty(U)), U = 0.5 ; end
+if (nargin < 6)
+   U = 0.5 ;
+end
+if (isempty(U))
+   U = 0.5 ;
+end
 U = U(1) ;
-if (abs(U) < eps), U = 0.5 ; end
+if (abs(U)<eps)
+   U = 0.5 ;
+end
 
-if (nargin < 5), Ts = 0.1 ; end
-if (isempty(Ts)), Ts = 0.1 ; end
+if (nargin < 5)
+   Ts = 0.1 ;
+end
+if (isempty(Ts))
+   Ts = 0.1 ;
+end
 Ts = abs(Ts(1)) ;
-if (Ts < eps), Ts = 0.1 ; end
+if (Ts<eps)
+   Ts = 0.1 ;
+end
 
-if (nargin < 4), Tmax = 80 ; end
-if (isempty(Tmax)), Tmax = 80 ; end
+if (nargin < 4)
+   Tmax = 80 ;
+end
+if (isempty(Tmax))
+   Tmax = 80 ;
+end
 Tmax = abs(Tmax(1)) ;
-if (Tmax < eps), Tmax = 80 ; end
-Tmax = max(250*Ts, Tmax) ;
+if (Tmax<eps)
+   Tmax = 80 ;
+end
+Tmax = max(250*Ts,Tmax) ;
 
-if (nargin < 3), T0 = 0.5 ; end
-if (isempty(T0)), T0 = 0.5 ; end
+if (nargin < 3)
+   T0 = 0.5 ;
+end
+if (isempty(T0))
+   T0 = 0.5 ;
+end
 T0 = T0(1) ;
-if (abs(T0) < eps), T0 = 0.5 ; end
+if (abs(T0)<eps)
+   T0 = 0.5 ;
+end
 
-if (nargin < 2), K0 = 4 ; end
-if (isempty(K0)), K0 = 4 ; end
+if (nargin < 2)
+   K0 = 4 ;
+end
+if (isempty(K0))
+   K0 = 4 ;
+end
 K0 = K0(1) ;
-if (abs(K0) < eps), K0 = 4 ; end
+if (abs(K0)<eps)
+   K0 = 4 ;
+end
 
-if (nargin < 1), mt = 0 ; end
-if (isempty(mt)), mt = 0 ; end
-mt = abs(round(mt(1))) ;
+if (nargin < 1)
+   met = 0 ;
+end
+if (isempty(met))
+   met = 0 ;
+end
+met = abs(round(met(1))) ;
 
+%
 % Generate identification data
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 [D,V] = gdata_DCeng(0,K0,T0,Tmax,Ts,U,lambda) ;
 
-% State-space identification (order 2)
-if (~mt)
-   disp([FN_str 'Using n4sid for state-space identification...']) ;
-   M = n4sid(D, 2) ;             % order 2 forced
-else
-   disp([FN_str 'Using pem for state-space identification...']) ;
-   M0 = n4sid(D, 2) ;            % initial model for pem
-   M  = pem(D, M0) ;
-end
-
-% ================================================================
-% Extract physical parameters from discrete state-space matrices
-% Discrete A (Euler): A_d = I + Ts*A_c
-%   A_c = [theta1  0 ]   =>  A_d(1,1) = 1 + Ts*theta1
-%         [alpha   0 ]       A_d(2,1) = Ts*alpha
-%   B_c = [theta2]          B_d(1,1) = Ts*theta2
-%         [0     ]
-%   C_c = [0  beta]         C_d = C_c (unchanged by Euler)
 %
-%   theta1 = (A_d(1,1) - 1) / Ts
-%   alpha  = A_d(2,1) / Ts
-%   theta2 = B_d(1,1) / Ts
-%   beta   = C_d(1,2)
-%
-%   T = -1/theta1
-%   K = -(alpha * beta * theta2) / theta1
-% ================================================================
-Ad = M.A ;
-Bd = M.B ;
-Cd = M.C ;
+% State-space identification
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% met = 0 -> n4sid
+% met = 1 -> pem
+% .........................................
+if (~met)
 
-theta1 = (Ad(1,1) - 1) / Ts ;
-alpha  = Ad(2,1) / Ts ;
-theta2 = Bd(1,1) / Ts ;
-beta   = Cd(1,2) ;
-
-if abs(theta1) < eps
-   warning([FN_str 'theta1 ~ 0, T cannot be estimated reliably.']) ;
-   F.T = Inf ;
-else
-   F.T = -1 / theta1 ;
-end
-
-F.K = -(alpha * beta * theta2) / theta1 ;
-
-% Display physical parameters
-disp(M1) ;
-disp(M2) ;
-disp(sprintf(M3, K0, F.K)) ;
-disp(sprintf(M4, T0, F.T)) ;
-disp(PK) ;
-pause ;
-
-% Time axis
-Tmax = Ts*round(Tmax/Ts) ;
-t = (0:Ts:Tmax)' ;
-N = length(t) ;
-
-% Simulated output
-y_sim = sim(M, D) ;
-if isobject(y_sim)
-   y_sim = y_sim.y ;
-end
-
-% Colored noise v = measured - simulated
-v = D.y - y_sim ;
-sigma2_v = cumsum(v.^2) ./ (1:N)' ;
-
-% ---- Figure 1: I/O data ----
-FIG = 10 ;
-figure(FIG), clf
-   plot(t, D.u, '-b', t, D.y, '-r') ;
-   title('Input-output data provided by a DC engine.') ;
-   xlabel('Time [s]') ; ylabel('Magnitude') ;
-   legend('input (square wave)', 'output', 0) ;
-FIG = FIG + 1 ;
-
-% ---- Figure 2: simulated vs measured + noise + variance ----
-figure(FIG), clf
-   subplot(3,1,1)
-      plot(t, y_sim, '-b', t, D.y, '-r') ;
-      title('Simulated output (state-space) vs measured output.') ;
-      xlabel('Time [s]') ; ylabel('Magnitude') ;
-      legend('simulated output', 'measured output', 0) ;
-   subplot(3,1,2)
-      plot(t, v, '-k') ;
-      title(sprintf('Colored noise v = y_{meas} - y_{sim}  (\\sigma^2 = %.4f)', var(v))) ;
-      xlabel('Time [s]') ; ylabel('v') ;
-   subplot(3,1,3)
-      plot(t, sigma2_v, '-m') ;
-      yline(var(v), '--r', sprintf('\\sigma^2 = %.4f', var(v))) ;
-      title('Running variance \sigma^2(n) of colored noise v') ;
-      xlabel('Time [s]') ; ylabel('\sigma^2') ;
-FIG = FIG + 1 ;
-
-disp(PK) ;
-pause ;
-
-% ================================================================
-% Noise model identification: 10 ARMA + 5 AR + 5 MA = 20 models
-% Structural indices pseudo-randomly in [1,20]
-% Note: pem/n4sid provide endogenous noise matrix (K in state-space).
-%       Exogenous noise v must still be identified separately via ARMA.
-% ================================================================
-disp(' ') ;
-disp('Identificarea zgomotului colorat v (exogen)') ;
-disp('=============================================') ;
-disp('Nota: pem/n4sid furnizeaza zgomotul endogen (matricea K).') ;
-disp('      Zgomotul exogen v este identificat separat cu ARMA.') ;
-disp(' ') ;
-
-ERR_DATA = iddata(v, [], Ts) ;
-
-% 10 ARMA models
-for i = 1:10
-   na = randi(20) ; nc = randi(20) ;
-   Mnoise(i) = armax(ERR_DATA, [na nc]) ;
-   fprintf('ARMA model %2d: na=%d, nc=%d\n', i, na, nc) ;
-end
-
-% 5 AR models via levinson
-r_v = xcorr(v, 'biased') ;
-r_v = r_v(N:end) ;
-for i = 1:5
-   p = randi(20) ;
-   [a_lev, ~] = levinson(r_v, p) ;
-   Mnoise(10+i) = armax(ERR_DATA, [p 0]) ;
-   fprintf('AR  model %2d: na=%d (levinson)\n', 10+i, p) ;
-end
-
-% 5 MA models
-for i = 1:5
-   nc = randi(20) ;
-   Mnoise(15+i) = armax(ERR_DATA, [0 nc]) ;
-   fprintf('MA  model %2d: nc=%d\n', 15+i, nc) ;
-end
-
-% Find best model (minimum white noise variance lambda^2)
-best_lambda2 = Inf ;
-best_idx = 1 ;
-lambda2_all = zeros(1,20) ;
-
-for i = 1:20
-   e = resid(ERR_DATA, Mnoise(i)) ;
-   lambda2_all(i) = var(e.y) ;
-   if lambda2_all(i) < best_lambda2
-      best_lambda2 = lambda2_all(i) ;
-      best_idx = i ;
+   try
+      opt = n4sidOptions ;
+      opt.Focus = 'simulation' ;
+      opt.EnforceStability = true ;
+      M = n4sid(D,2,opt) ;
+   catch
+      M = n4sid(D,2) ;
    end
-   fprintf('Model %2d: lambda^2 = %.6f\n', i, lambda2_all(i)) ;
+
+else
+
+   try
+      opt1 = n4sidOptions ;
+      opt1.Focus = 'simulation' ;
+      opt1.EnforceStability = true ;
+      M0 = n4sid(D,2,opt1) ;
+
+      opt2 = pemOptions ;
+      opt2.Focus = 'simulation' ;
+      opt2.EnforceStability = true ;
+      M = pem(D,M0,opt2) ;
+   catch
+      M0 = n4sid(D,2) ;
+      M = pem(D,M0) ;
+   end
+
 end
 
-fprintf('\nAutomatic best model: M%d (lambda^2 = %.6f)\n', best_idx, best_lambda2) ;
+%
+% Convert state-space model to transfer function
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% The physical parameters K and T are recovered from
+% the discrete transfer function obtained from the
+% identified state-space model.
+% .........................................
+G = tf(M) ;
+[num,den] = tfdata(G,'v') ;
 
-% ---- Figure 3: lambda^2 comparison ----
-figure(FIG), clf
-   bar(lambda2_all) ;
-   hold on
-   bar(best_idx, lambda2_all(best_idx), 'r') ;
-   title('White noise variance \lambda^2 for each noise model') ;
-   xlabel('Model index') ; ylabel('\lambda^2') ;
-   legend('Models', 'Best') ;
-FIG = FIG + 1 ;
+if (iscell(num))
+   num = num{1} ;
+end
+if (iscell(den))
+   den = den{1} ;
+end
+
+num = num(:).' ;
+den = den(:).' ;
+
+if (abs(den(1)) > eps)
+   num = num/den(1) ;
+   den = den/den(1) ;
+end
+
+if (length(num) < 3)
+   num = [zeros(1,3-length(num)) num] ;
+end
+
+if (length(den) < 3)
+   den = [zeros(1,3-length(den)) den] ;
+end
+
+b1 = num(end-1) ;
+b2 = num(end) ;
+a2 = den(end) ;
+
+if (abs(b1+b2)<eps)
+   F.K = NaN ;
+   F.T = NaN ;
+else
+   F.K = (b1+b2)/(1-a2)/Ts ;
+   F.T = Ts*(a2*b1+b2)/(b1+b2)/(1-a2) ;
+end
+
+%
+% Build physical state-space representation
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% Continuous physical state-space form:
+%
+% x1_dot = theta2*x1 + alpha*u
+% x2_dot = theta1*x1
+% y      = beta*x2
+%
+% T = -1/theta2
+% K = -alpha*beta*theta1/theta2
+% .........................................
+if (~isnan(F.K) && ~isnan(F.T) && F.T > eps)
+
+   theta2 = -1/F.T ;
+   theta1 = F.K/(alpha*beta*F.T) ;
+
+   Ac = [theta2 0 ; theta1 0] ;
+   Bc = [alpha ; 0] ;
+   Cc = [0 beta] ;
+   Dc = 0 ;
+
+   Pc = ss(Ac,Bc,Cc,Dc) ;
+   Pd = c2d(Pc,Ts,'zoh') ;
+
+   Tmax = Ts*round(Tmax/Ts) ;
+   t = 0:Ts:Tmax ;
+   ysim = lsim(Pd,D.u,t') ;
+
+else
+
+   Tmax = Ts*round(Tmax/Ts) ;
+   t = 0:Ts:Tmax ;
+
+   ytmp = sim(M,D.u) ;
+
+   if (isa(ytmp,'iddata'))
+      ysim = ytmp.y ;
+   else
+      ysim = ytmp ;
+   end
+
+   Ac = NaN ;
+   Bc = NaN ;
+   Cc = NaN ;
+
+end
+
+%
+% Display physical parameters
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+war_err(M1) ;
+disp(M2) ;
+fprintf(1,M3,K0,F.K) ;
+fprintf(1,M4,T0,F.T) ;
 
 disp(' ') ;
-option = input(sprintf('Alegeti cel mai bun model (1->20) [automat: %d]: ', best_idx)) ;
-if isempty(option), option = best_idx ; end
-MODEL_BEST = Mnoise(option) ;
+if (~met)
+   disp([FN 'State-space identification method: n4sid']) ;
+else
+   disp([FN 'State-space identification method: pem']) ;
+end
 
-% ---- Figure 4: best model residuals ----
-e_best = resid(ERR_DATA, MODEL_BEST) ;
-figure(FIG), clf
-   subplot(2,1,1)
-      plot(t, v, '-k') ;
-      title(sprintf('Colored noise v | best model: M%d', option)) ;
-      xlabel('Time [s]') ; ylabel('v') ;
-   subplot(2,1,2)
-      plot(t, e_best.y, '-b') ;
-      title(sprintf('White noise e | \\lambda^2 = %.6f', var(e_best.y))) ;
-      xlabel('Time [s]') ; ylabel('e') ;
-FIG = FIG + 1 ;
+disp([FN 'alpha = ' num2str(alpha)]) ;
+disp([FN 'beta  = ' num2str(beta)]) ;
 
-disp(PK) ;
+disp(' ') ;
+disp([FN 'Physical state-space model:']) ;
+disp('A = ') ;
+disp(Ac) ;
+disp('B = ') ;
+disp(Bc) ;
+disp('C = ') ;
+disp(Cc) ;
+
+try
+   disp(' ') ;
+   disp([FN 'Endogenous noise matrix K from state-space model:']) ;
+   disp(M.K) ;
+catch
+   disp(' ') ;
+   disp([FN 'No endogenous noise matrix was available.']) ;
+end
+
+war_err(PK) ;
 pause ;
+
+%
+% Plot I/O data
+% ~~~~~~~~~~~~~
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,D.u,'-b',t,D.y,'-r') ;
+   FN2 = scaling([D.u D.y]) ;
+   axis([0 Tmax FN2]) ;
+   title('Input-output data provided by a DC engine.') ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('input','output') ;
+FIG = FIG+1 ;
+
+%
+% Plot measured output versus simulated output
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,ysim,'-b',t,D.y,'-r',t,ysim,'-b') ;
+   FN2 = scaling([ysim D.y]) ;
+   axis([0 Tmax FN2]) ;
+   title('Measured output versus simulated output') ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('simulated output','measured output') ;
+FIG = FIG+1 ;
+
+%
+% Colored noise
+% ~~~~~~~~~~~~~
+% .........................................
+% Difference between measured output and simulated output
+% .........................................
+v = D.y - ysim ;
+sigma2 = var(v) ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,v,'-r') ;
+   FN2 = scaling(v) ;
+   axis([0 Tmax FN2]) ;
+   title(['Colored noise v, sigma^2 = ' num2str(sigma2)]) ;
+   xlabel('Time [s]') ;
+   ylabel('v') ;
+   legend(['sigma^2 = ' num2str(sigma2)]) ;
+FIG = FIG+1 ;
+
+%
+% Exogenous noise identification
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% pem and n4sid provide the endogenous noise matrix.
+% The exogenous output noise is identified here
+% with AR, MA and ARMA models.
+% .........................................
+best_lambda2 = inf ;
+best_e = v ;
+best_vhat = v ;
+best_name = 'none' ;
+
+NID = iddata(v,[],Ts) ;
+
+rng('shuffle') ;
+
+% .........................................
+% 10 ARMA models
+% .........................................
+for k = 1:10
+
+   na_n = randi([1 20]) ;
+   nc_n = randi([1 20]) ;
+
+   try
+
+      NM = armax(NID,[na_n nc_n]) ;
+
+      e_n = resid(NM,NID) ;
+      e_n = e_n.OutputData ;
+
+      lambda2_n = var(e_n) ;
+
+      if (lambda2_n < best_lambda2)
+
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = v - e_n ;
+         best_name = ['ARMA(' num2str(na_n) ',' num2str(nc_n) ')'] ;
+
+      end
+
+   catch
+
+   end
+
+end
+
+% .........................................
+% 5 MA models
+% .........................................
+for k = 1:5
+
+   nc_n = randi([1 20]) ;
+
+   try
+
+      NM = armax(NID,[0 nc_n]) ;
+
+      e_n = resid(NM,NID) ;
+      e_n = e_n.OutputData ;
+
+      lambda2_n = var(e_n) ;
+
+      if (lambda2_n < best_lambda2)
+
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = v - e_n ;
+         best_name = ['MA(' num2str(nc_n) ')'] ;
+
+      end
+
+   catch
+
+   end
+
+end
+
+% .........................................
+% 5 AR models
+% .........................................
+for k = 1:5
+
+   na_n = randi([1 20]) ;
+
+   try
+
+      rv = xcorr(v,na_n,'biased') ;
+      rv = rv(na_n+1:end) ;
+
+      [Aar,lambda2_n] = levinson(rv,na_n) ;
+
+      e_n = filter(Aar,1,v) ;
+
+      if (lambda2_n < best_lambda2)
+
+         best_lambda2 = lambda2_n ;
+         best_e = e_n ;
+         best_vhat = v - e_n ;
+         best_name = ['AR(' num2str(na_n) ')'] ;
+
+      end
+
+   catch
+
+   end
+
+end
+
+disp(' ') ;
+disp([FN 'Best exogenous noise model: ' best_name]) ;
+disp([FN 'lambda^2 = ' num2str(best_lambda2)]) ;
+
+%
+% Output with estimated colored noise
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% Measured output versus simulated output corrected
+% with the estimated colored noise
+% .........................................
+yhat_noise = ysim + best_vhat ;
+
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,D.y,'-r',t,yhat_noise,'-b') ;
+   FN2 = scaling([D.y yhat_noise]) ;
+   axis([0 Tmax FN2]) ;
+   title('Measured output and output with estimated noise') ;
+   xlabel('Time [s]') ;
+   ylabel('Magnitude') ;
+   legend('measured output',best_name) ;
+FIG = FIG+1 ;
+
+%
+% Estimated white noise
+% ~~~~~~~~~~~~~~~~~~~~~
+% .........................................
+% Estimated white noise obtained after filtering
+% the colored noise
+% .........................................
+figure(FIG),clf
+   fig_look(FIG,1.5) ;
+   plot(t,best_e,'-k') ;
+   FN2 = scaling(best_e) ;
+   axis([0 Tmax FN2]) ;
+   title(['Estimated white noise e, lambda^2 = ' num2str(best_lambda2)]) ;
+   xlabel('Time [s]') ;
+   ylabel('e') ;
+   legend(['lambda^2 = ' num2str(best_lambda2)]) ;
+FIG = FIG+1 ;
 
 %
 % END

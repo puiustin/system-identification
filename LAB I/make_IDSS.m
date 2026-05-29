@@ -2,8 +2,8 @@ function DATA = make_IDSS()
 %functia genereaza un obiect idss cu matrici aleatoare pentru testare
 
 nx = 3;   % numarul de stari (ordinul sistemului)
-nu = 5;   % numarul de semnale de intrare
-ny = 3;   % numarul de semnale de iesire
+nu = 3;   % numarul de semnale de intrare
+ny = 4;   % numarul de semnale de iesire
 Ts = 0.1; % perioada de esantionare (timpul de masura)
 
 %generarea matricelor spatiului starilor cu valori random

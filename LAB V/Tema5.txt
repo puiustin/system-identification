@@ -1,0 +1,113 @@
+Tema 5
+
+Problema 6.1
+
+(ARMAX cu MMEP): Este deja implementată parțial în ISLAB_6A.m. Aceasta
+folosește metoda minimizarii erorii de predicție (MMEP) pentru a
+identifica un model ARMAX. Se bazeaza pe funcția armax din MATLAB System
+Identification Toolbox.
+
+[]
+
+Avand in vedere ca se estimeaza un model ARMAX un alt model armax…+
+utilizizare MMEP …se observa ca la fiecare rulare criteriile identifica
+valoi aproape de cele reale
+
+Problema 6.2
+
+(BJ cu MMEP): Trebuie creat un simulator similar (ISLAB_6B.m) pentru
+modelul Box-Jenkins (BJ), folosind funcția bj din MATLAB.
+
+[]
+
+B) Pentru bj am apelatu functia dinmatlab..si am redus numarul maxim al
+idndicilor, avand in vedere numarul de combinatii de parametrii (avem 4
+parametrii ) deci ar dura foarte mult…
+
+Legat de afisare, la fel, fiecare criteriu este aprope de valorea reala
+a modelului.
+
+Problema 6.3
+
+(MCMMPE pentru ARMAX și BJ):
+
+* Implementarea funcțiilor armax_e și bj_e care folosesc metoda celor
+mai mici pătrate extinsă (MCMMPE). Această metodă presupune:
+
+* Estimarea zgomotului folosind un model ARX de ordin mare.
+
+* Folosirea zgomotului estimat ca regressor într-un model extins pentru
+a estima parametrii finali.
+
+* Implementarea simulatorului ISLAB_6C.m pentru a compara performanțele
+MCMMPE cu MMEP.
+
+[]
+
+[]
+
+In cadrul functiei armax_e, am implementat (MCMMPE) printr-un algoritm
+structurat in doua etape, necesare deoarece vectorul regresorilor
+contine componente de zgomot,nemasurabile.
+
+In prima etapa, am realizat o estimare preliminara a zgomotului care
+afecteaza sistemul. Pentru aceasta, am aproximat dinamica procesului
+folosind un model de tip ARX de ordin ridicat (mult mai mare decat
+ordinul real al sistemului), capabil sa surprinda comportamentul
+raportului polinoamelor sistemului. Reziduurile obtinute in urma acestei
+identificari ARX au fost considerate o estimare valida a zgomotului alb
+real
+
+In a doua etapa, am construit manual matricea regresorilor. Aceasta a
+fost formata prin concatenarea a trei tipuri de vectori coloana pentru
+fiecare moment de timp: esantioanele trecute ale iesirii masurate
+(pentru partea A), esantioanele trecute ale intrarii (pentru partea B)
+si, elementul de noutate, esantioanele trecute ale erorii estimate la
+pasul anterior (pentru C). Odata construita aceasta matrice extinsa,
+vectorul parametrilor a fost obtinut direct, analitic, prin rezolvarea
+sistemului supradeterminat folosind metoda celor mai mici patrate.
+
+[][]
+
+Aplicarea MCMMPE pentru structura Box-Jenkins (BJ) a necesitat o
+abordare indirecta, deoarece modelul BJ poseda doi numitori independenti
+(F si D pentru zgomot), ceea ce face imposibila liniarizarea directa a
+ecuatiei.Strategia adoptata a constat in transformarea modelului BJ
+intr-un model "pseudo-ARMAX" prin aducerea la acelasi numitor comun.
+Astfel, s-au obtinut trei polinoame compuse. Dupa identificarea acestui
+model ARMAX extins folosind functia armax_e, separarea parametrilor
+originali s-a realizat pe baza proprietatilor radacinilor. Deoarece
+polinomul D apare ca factor comun atat in A cat si in B algoritmul a
+izolat radacinile lui D cautand acele radacini ale lui Avcare se afla la
+distanta minima de radacinile lui B. Radacinile ramase au fost atribuite
+polinomului F, iar numaratorii B si C au fost obtinuti prin deconvolutie
+polinomiala.
+
+In urma rularii simularilor pentru ambele tipuri de modele, se pot
+desprinde urmatoarele
+
+concluzii privind performanta celor doua metode de identificare: Din
+punct de vedere al preciziei, Metoda Minimizarii Erorii de Predictie
+(MMEP - implementata prin functiile native MATLAB armax si bj) este
+superioara. Aceasta utilizeaza algoritmi de optimizare iterativa (de tip
+Gauss-Newton) care cauta minimul global al
+
+functiei de cost, rafinand parametrii pana la convergenta. In contrast,
+MCMMPE este o metoda aproximativa; desi ofera rezultate satisfacatoare,
+estimarea sa este usor deplasata (biased) deoarece se bazeaza pe o
+reconstructie imperfecta a zgomotului in prima etapa.
+
+Din punct de vedere al vitezei, MCMMPE prezinta avantajul vitezei si al
+robustetii. Fiind o metoda bazata pe operatii matriceale, aceasta nu
+sufera de probleme de convergenta si nu ramane blocata in minime locale,
+oferind rapid o solutie unica. MMEP, desi mai precisa, este
+computational mai costisitoare si risca sa divearga daca nu este
+initializata corect. Specific pentru modelul Box-Jenkins, s-a observat
+ca MCMMPE este mai sensibila la erori decat in cazul ARMAX. Procesul de
+separare a polinoamelor prin identificarea radacinilor comune este
+vulnerabil la zgomot puternic: o mica eroare in estimarea coeficientilor
+poate deplasa radacinile suficient de mult incat algoritmul de sortare
+sa clasifice gresit polii sistemului ca poli de zgomot (sau invers),
+alterand structura modelului final. Prin urmare, pentru aplicatii
+critice, se recomanda utilizarea MCMMPE doar ca metoda de initializare
+pentru algoritmul iterativ MMEP.
